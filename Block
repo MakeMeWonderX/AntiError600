@@ -7,7 +7,7 @@ task.spawn(function()
     local place = game.PlaceId
 
     while true do
-        task.wait(10800) -- 3 ชั่วโมง
+        task.wait(9000) -- 3 ชั่วโมง
         local function listServers()
             local url = Api .. place .. "/servers/Public?sortOrder=Asc&limit=10"
             local body = Http:JSONDecode(game:HttpGet(url))
