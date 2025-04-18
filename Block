@@ -1,5 +1,5 @@
 -- ตั้งค่า Webhook URL ของคุณตรงนี้
-local webhookURL = "https://discord.com/api/webhooks/1217498672086909058/eJ8l3L1KNlX89s0GmQqdBkruuHUGJqwpZF8_DA4E-cJiRY6UaLnpETVdwIaOmQJ7hqb2"
+local webhookURL = "https://discord.com/api/webhooks/1217498669058621531/qyr6HIrmPfE1XwJB7HjF8-SdCY8fiFq6W_lqqPi8GqMDBvt9D5SK4h7rCbaIhb5RwacG"
 
 -- ฟังก์ชันส่งข้อความไปยัง Discord
 local function sendWebhookMessage(msg)
