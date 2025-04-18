@@ -37,9 +37,10 @@ task.spawn(function()
     local cam = workspace.CurrentCamera
     while true do
         task.wait(8)
-        -- หมุนกล้องสุ่ม
-        local yaw = math.rad(math.random(-45, 45))
-        cam.CFrame = cam.CFrame * CFrame.Angles(0, yaw, 0)
+        -- หมุนกล้องสุ่มแบบแรงขึ้น
+        local yaw = math.rad(math.random(-90, 90)) -- หันแรงขึ้น 2 เท่า
+        local pitch = math.rad(math.random(-15, 15)) -- เพิ่มก้ม/เงยเล็กน้อย
+        cam.CFrame = cam.CFrame * CFrame.Angles(pitch, yaw, 0)
 
         -- เลี้ยวซ้าย-ขวาสลับสุ่ม (จำลองพฤติกรรมผู้เล่น)
         local bike
@@ -60,7 +61,7 @@ task.spawn(function()
     end
 end)
 
--- ✅ ยกล้อ + ดริฟต์ + หมุนพวงมาลัยทุก 10 วิ
+-- ✅ ยกล้อ + ดริฟต์ + หมุนพวงมาลัยทุก 20 วิ
 task.spawn(function()
     local function getBike()
         for _, model in pairs(workspace:GetChildren()) do
@@ -94,7 +95,13 @@ task.spawn(function()
                 wait(0.5)
                 seat.Steer = 0
             end
+
+            -- เพิ่มการเร่งความเร็วแบบหลอกๆ
+            local throttle = seat.Throttle
+            seat.Throttle = 0.6 -- เร่งเต็มที่
+            wait(2)
+            seat.Throttle = throttle -- คืนค่าความเร็วกลับไป
         end
-        wait(10)
+        wait(20) -- ยกล้อทุก 20 วิ
     end
 end)
