@@ -1,3 +1,29 @@
+-- ตั้งค่า Webhook URL ของคุณตรงนี้
+local webhookURL = "https://discord.com/api/webhooks/1217498672086909058/eJ8l3L1KNlX89s0GmQqdBkruuHUGJqwpZF8_DA4E-cJiRY6UaLnpETVdwIaOmQJ7hqb2"
+
+-- ฟังก์ชันส่งข้อความไปยัง Discord
+local function sendWebhookMessage(msg)
+    local HttpService = game:GetService("HttpService")
+    local data = {
+        ["content"] = msg
+    }
+    local headers = {
+        ["Content-Type"] = "application/json"
+    }
+
+    local success, err = pcall(function()
+        HttpService:PostAsync(webhookURL, HttpService:JSONEncode(data), Enum.HttpContentType.ApplicationJson, false, headers)
+    end)
+
+    if not success then
+        warn("ไม่สามารถส่ง Webhook ได้: ", err)
+    end
+end
+
+-- เรียกใช้เมื่อตัวจักรยานเริ่มทำงาน (แปลว่าเพิ่งรีเซิร์ฟ)
+sendWebhookMessage("🚴‍♂️ สคริปต์จักรยานเริ่มทำงานใหม่ อาจเกิดจากการ Hop Server หรือ Restart Server")
+
+
 -- ✅ Server Hop ทุก 3 ชั่วโมง
 task.spawn(function()
     local Http = game:GetService("HttpService")
