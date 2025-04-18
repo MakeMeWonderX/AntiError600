@@ -1,0 +1,86 @@
+-- ตรวจว่าโหลดเกมครบแล้ว
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInput = game:GetService("VirtualInputManager")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+-- Hop Server ทุก 2 ชั่วโมงครึ่ง (9000 วินาที)
+local api = "https://games.roblox.com/v1/games/"
+local placeId = game.PlaceId
+local function hopLowServer()
+	local function getServers(cursor)
+		local url = api .. placeId .. "/servers/Public?sortOrder=Asc&limit=100" .. (cursor and "&cursor=" .. cursor or "")
+		local data = HttpService:JSONDecode(game:HttpGet(url))
+		return data
+	end
+
+	local servers, cursor = {}, nil
+	repeat
+		local data = getServers(cursor)
+		for _, server in ipairs(data.data) do
+			if server.playing < server.maxPlayers then
+				table.insert(servers, server)
+			end
+		end
+		cursor = data.nextPageCursor
+	until not cursor or #servers > 0
+
+	if #servers > 0 then
+		local server = servers[math.random(1, #servers)]
+		TeleportService:TeleportToPlaceInstance(placeId, server.id, player)
+	end
+end
+
+-- ฟังก์ชันหมุนกล้อง
+local function rotateCamera()
+	local angles = math.random(-30, 30)
+	game:GetService("Workspace").CurrentCamera.CFrame *= CFrame.Angles(0, math.rad(angles), 0)
+end
+
+-- ฟังก์ชันกระโดด
+local function jump()
+	if humanoid and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
+		humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	end
+end
+
+-- ฟังก์ชันเดินสุ่ม
+local function randomWalk()
+	local direction = Vector3.new(math.random(-1, 1), 0, math.random(-1, 1)).Unit
+	if direction.Magnitude > 0 then
+		local velocity = direction * 8 -- ปรับความเร็ว
+		hrp.Velocity = Vector3.new(velocity.X, hrp.Velocity.Y, velocity.Z)
+	end
+end
+
+-- Loop หลัก
+task.spawn(function()
+	while true do
+		randomWalk()
+		rotateCamera()
+
+		if math.random(1, 5) == 1 then
+			jump()
+		end
+
+		task.wait(math.random(3, 6)) -- เดินๆหยุดๆ
+	end
+end)
+
+-- ตั้งเวลาสำหรับ hop server
+task.spawn(function()
+	while true do
+		task.wait(9000) -- 2 ชั่วโมงครึ่ง
+		hopLowServer()
+	end
+end)
