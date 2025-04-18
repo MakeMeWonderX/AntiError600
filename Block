@@ -94,11 +94,13 @@ task.spawn(function()
                 seat.Steer = 1
                 wait(0.5)
                 seat.Steer = 0
+            end
 
-        -- กดหมัด (ใช้คีย์ 1)
-            game:GetService("VirtualInputManager"):InputBegin(Enum.UserInputType.Keyboard, Enum.KeyCode.One)
-            game:GetService("VirtualInputManager"):InputEnd(Enum.UserInputType.Keyboard, Enum.KeyCode.One)
-      end
+            -- กดหมัด (ใช้คีย์ 1) **เฉพาะตอนที่จักรยานจอด**
+            if seat.Throttle == 0 then  -- ตรวจสอบว่าจักรยานหยุดหรือไม่
+                game:GetService("VirtualInputManager"):InputBegin(Enum.UserInputType.Keyboard, Enum.KeyCode.One)
+                game:GetService("VirtualInputManager"):InputEnd(Enum.UserInputType.Keyboard, Enum.KeyCode.One)
+            end
 
             -- เพิ่มการเร่งความเร็วแบบหลอกๆ
             local throttle = seat.Throttle
