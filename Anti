@@ -1,51 +1,54 @@
--- Variables
-local user = game:GetService("Players").LocalPlayer
-local bike = user.Character:WaitForChild("Bike")
-local userRoot = user.Character:WaitForChild("HumanoidRootPart")
-local bikeSpeed = 0
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Bike Movement
-function performWheelie()
-    -- ทำการยกล้อจักรยาน
-    if bike and bike:FindFirstChild("Body") then
-        bike:FindFirstChild("Body").BodyVelocity.Velocity = Vector3.new(0, 50, bikeSpeed)
-    end
+local lastWheelie = 0
+local lastDrift = 0
+local wheelieInterval = 20
+local driftInterval = 12
+local floatHeight = 3
+
+-- Function to float bike over obstacles
+local function floatOverObstacles()
+	local ray = Ray.new(HumanoidRootPart.Position, Vector3.new(0, -5, 0))
+	local part, position = workspace:FindPartOnRay(ray, Character)
+	if part and (HumanoidRootPart.Position - position).Magnitude < 2 then
+		HumanoidRootPart.Velocity = Vector3.new(0, 50, 0)
+	end
 end
 
--- Camera and Turning Control
-function rotateCamera()
-    -- หมุนกล้องทุกๆ 8 วินาที
-    while wait(8) do
-        game:GetService("TweenService"):Create(workspace.CurrentCamera, TweenInfo.new(0.5), {CFrame = workspace.CurrentCamera.CFrame * CFrame.Angles(0, math.rad(30), 0)}):Play()
-    end
+-- Simulate Wheelie
+local function doWheelie()
+	local now = tick()
+	if now - lastWheelie >= wheelieInterval then
+		lastWheelie = now
+		HumanoidRootPart.Velocity = HumanoidRootPart.CFrame.LookVector * 40 + Vector3.new(0, 20, 0)
+	end
 end
 
--- Bike Hovering (Lifting over obstacles)
-function hoverOverObstacles()
-    -- ลอยจักรยานข้ามสิ่งกีดขวาง
-    while wait(0.1) do
-        if bike and bike:FindFirstChild("Body") then
-            local ray = Ray.new(userRoot.Position, Vector3.new(0, -5, 0))
-            local hit, pos = workspace:FindPartOnRay(ray, user.Character)
-            if hit then
-                -- ตรวจจับว่ามีวัตถุข้างล่างหรือไม่
-                bike:FindFirstChild("Body").BodyPosition.MaxForce = Vector3.new(10000, 10000, 10000)
-                bike:FindFirstChild("Body").BodyPosition.Position = pos + Vector3.new(0, 3, 0)  -- ลอยขึ้น
-            end
-        end
-    end
+-- Simulate Drift
+local function doDrift()
+	local now = tick()
+	if now - lastDrift >= driftInterval then
+		lastDrift = now
+		HumanoidRootPart.Velocity = HumanoidRootPart.CFrame.RightVector * 40
+	end
 end
 
--- Main Loop for actions
-while true do
-    wait(20)  -- ยกจักรยาน
-    performWheelie()
-    
-    if bike and bike:FindFirstChild("Body") then
-        bikeSpeed = bike.BodyVelocity.Velocity.Magnitude
-    end
-end
+-- Rotate Camera Periodically
+task.spawn(function()
+	while true do
+		wait(8)
+		local cam = workspace.CurrentCamera
+		cam.CFrame = cam.CFrame * CFrame.Angles(0, math.rad(math.random(-60, 60)), 0)
+	end
+end)
 
--- Start functions
-spawn(rotateCamera)
-spawn(hoverOverObstacles)
+-- Periodic Actions
+RunService.RenderStepped:Connect(function()
+	floatOverObstacles()
+	doWheelie()
+	doDrift()
+end)
