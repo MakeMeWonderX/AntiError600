@@ -1,85 +1,51 @@
--- 🌀 รวมระบบเดินสุ่ม + กระโดดข้ามสิ่งกีดขวาง + รีเซ็ตตัวถ้านิ่งเกิน 30 วิ + hop low ถ้าจักรยานเข้าใกล้
+-- Variables
+local user = game:GetService("Players").LocalPlayer
+local bike = user.Character:WaitForChild("Bike")
+local userRoot = user.Character:WaitForChild("HumanoidRootPart")
+local bikeSpeed = 0
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local hrp = character:WaitForChild("HumanoidRootPart")
-local humanoid = character:WaitForChild("Humanoid")
+-- Bike Movement
+function performWheelie()
+    -- ทำการยกล้อจักรยาน
+    if bike and bike:FindFirstChild("Body") then
+        bike:FindFirstChild("Body").BodyVelocity.Velocity = Vector3.new(0, 50, bikeSpeed)
+    end
+end
 
--- 🕒 ตัวแปรตรวจจับการหยุดนิ่ง
-local lastPosition = hrp.Position
-local lastMoveTime = tick()
+-- Camera and Turning Control
+function rotateCamera()
+    -- หมุนกล้องทุกๆ 8 วินาที
+    while wait(8) do
+        game:GetService("TweenService"):Create(workspace.CurrentCamera, TweenInfo.new(0.5), {CFrame = workspace.CurrentCamera.CFrame * CFrame.Angles(0, math.rad(30), 0)}):Play()
+    end
+end
 
--- 🌐 ฟังก์ชัน hop low
-local function hopLow()
-    local PlaceID = game.PlaceId
-    local servers = {}
-    local req = syn and syn.request or http_request or request
-    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID)
-    local data = game:GetService("HttpService"):JSONDecode(req({Url = url, Method = "GET"}).Body)
-
-    for _, v in pairs(data.data) do
-        if type(v.playing) == "number" and v.playing < 10 and v.id ~= game.JobId then
-            TeleportService:TeleportToPlaceInstance(PlaceID, v.id)
-            break
+-- Bike Hovering (Lifting over obstacles)
+function hoverOverObstacles()
+    -- ลอยจักรยานข้ามสิ่งกีดขวาง
+    while wait(0.1) do
+        if bike and bike:FindFirstChild("Body") then
+            local ray = Ray.new(userRoot.Position, Vector3.new(0, -5, 0))
+            local hit, pos = workspace:FindPartOnRay(ray, user.Character)
+            if hit then
+                -- ตรวจจับว่ามีวัตถุข้างล่างหรือไม่
+                bike:FindFirstChild("Body").BodyPosition.MaxForce = Vector3.new(10000, 10000, 10000)
+                bike:FindFirstChild("Body").BodyPosition.Position = pos + Vector3.new(0, 3, 0)  -- ลอยขึ้น
+            end
         end
     end
 end
 
--- ⏲️ hop low ทุก ๆ 2 ชั่วโมงครึ่ง
-spawn(function()
-    while task.wait(9000) do -- 2.5 ชั่วโมง = 9000 วินาที
-        hopLow()
+-- Main Loop for actions
+while true do
+    wait(20)  -- ยกจักรยาน
+    performWheelie()
+    
+    if bike and bike:FindFirstChild("Body") then
+        bikeSpeed = bike.BodyVelocity.Velocity.Magnitude
     end
-end)
+end
 
--- 🎯 เดินสุ่ม + กระโดดข้ามสิ่งกีดขวาง
-spawn(function()
-    while task.wait(math.random(4, 8)) do
-        if humanoid and humanoid.MoveDirection.Magnitude < 0.1 then
-            humanoid:Move(Vector3.new(math.random(-1,1),0,math.random(-1,1)), false)
-        end
-        if math.random(1, 4) == 1 then
-            humanoid.Jump = true -- กระโดดข้ามสิ่งกีดขวางแบบสุ่ม
-        end
-    end
-end)
-
--- 🌀 หมุนกล้องทุก 8 วิ
-spawn(function()
-    while task.wait(8) do
-        local cam = workspace.CurrentCamera
-        cam.CFrame *= CFrame.Angles(0, math.rad(math.random(-60,60)), 0)
-    end
-end)
-
--- 🚲 ตรวจจับจักรยานเข้าใกล้ (ชื่อจักรยานต้องมีคำว่า "Bike")
-spawn(function()
-    while task.wait(2) do
-        for _, v in ipairs(workspace:GetDescendants()) do
-            if v:IsA("Model") and v.Name:lower():find("bike") and v:FindFirstChild("PrimaryPart") then
-                local dist = (v.PrimaryPart.Position - hrp.Position).Magnitude
-                if dist < 25 then
-                    hopLow()
-                    break
-                end
-            end
-        end
-    end
-end)
-
--- ⛔ รีเซ็ตตัวถ้าหยุดเดินเกิน 30 วิ
-RunService.Heartbeat:Connect(function()
-    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-    local currentPosition = player.Character.HumanoidRootPart.Position
-    if (currentPosition - lastPosition).magnitude > 0.1 then
-        lastMoveTime = tick()
-        lastPosition = currentPosition
-    else
-        if tick() - lastMoveTime > 30 then
-            player.Character:BreakJoints()
-        end
-    end
-end)
+-- Start functions
+spawn(rotateCamera)
+spawn(hoverOverObstacles)
