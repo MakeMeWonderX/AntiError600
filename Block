@@ -1,82 +1,102 @@
--- 🧠 ระบบเดินแบบสุ่ม + รีเซ็ตตัวถ้าหยุดนิ่งเกิน 30 วิ
+-- 📌 Script รวมระบบ: เดินสุ่ม + กระโดด + หมุนกล้อง + รีตัวเมื่อหยุดเดิน + Hop Low หากมีจักรยานเข้าใกล้
+
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local TeleportService = game:GetService("TeleportService")
-local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local lp = Players.LocalPlayer
 
+-- 🔁 รีตัวถ้า AFK 30 วินาที
+local lastPosition = nil
 local lastMoved = tick()
-local hopCooldown = 60 * 150 -- 2.5 ชั่วโมงในวินาที
-local lastHop = tick()
 
--- ฟังก์ชันรีเซ็ตตัวละครแบบกดปุ่ม Reset จริง ๆ
-local function resetCharacter()
-    if player then
-        player:LoadCharacter()
+RunService.Heartbeat:Connect(function()
+    if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = lp.Character.HumanoidRootPart.Position
+        if lastPosition and (pos - lastPosition).Magnitude > 0.1 then
+            lastMoved = tick()
+        end
+        lastPosition = pos
+
+        if tick() - lastMoved > 30 then
+            local humanoid = lp.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.Health = 0 -- รีเซ็ตร่าง
+            end
+            lastMoved = tick()
+        end
     end
+end)
+
+-- 🚴‍♂️ ตรวจจับจักรยานเข้าใกล้แล้ว Hop
+local function isBikeNearby()
+    if not lp.Character or not lp.Character:FindFirstChild("HumanoidRootPart") then return false end
+    local myPos = lp.Character.HumanoidRootPart.Position
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("VehicleSeat") and (v.Position - myPos).Magnitude < 25 then
+            return true
+        end
+    end
+    return false
 end
 
--- ฟังก์ชัน hop ไปยังเซิร์ฟเวอร์ที่มีคนน้อย
-local function hopToLowServer()
-    local HttpService = game:GetService("HttpService")
-    local PlaceId = game.PlaceId
-    local success, servers = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
-    end)
-    if success and servers and servers.data then
-        for _, server in ipairs(servers.data) do
-            if server.playing < server.maxPlayers then
-                TeleportService:TeleportToPlaceInstance(PlaceId, server.id)
+RunService.Heartbeat:Connect(function()
+    if isBikeNearby() then
+        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        for _, s in pairs(servers.data) do
+            if s.playing < s.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, lp)
                 break
             end
         end
     end
-end
+end)
 
--- ฟังก์ชันสุ่มเดิน + กระโดด
-local function randomMovement()
-    local character = player.Character
-    if character and character:FindFirstChild("Humanoid") then
-        local humanoid = character.Humanoid
-        local directions = {
-            Enum.KeyCode.W,
-            Enum.KeyCode.A,
-            Enum.KeyCode.S,
-            Enum.KeyCode.D,
-        }
-        local chosen = directions[math.random(1, #directions)]
-        keypress(chosen)
-        wait(math.random(1, 3))
-        keyrelease(chosen)
-        if math.random(1, 4) == 1 then
-            humanoid.Jump = true
+-- 🚶‍♂️ เดินสุ่ม + กระโดด + หมุนกล้อง + Hop Low ทุก 2.5 ชั่วโมง
+local function randomMove()
+    local humanoid = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        local action = math.random(1, 4)
+        if action == 1 then
+            humanoid:Move(Vector3.new(1, 0, 0), false) -- เดินขวา
+        elseif action == 2 then
+            humanoid:Move(Vector3.new(-1, 0, 0), false) -- เดินซ้าย
+        elseif action == 3 then
+            humanoid:Move(Vector3.new(0, 0, 1), false) -- เดินหน้า
+        elseif action == 4 then
+            humanoid:Move(Vector3.new(0, 0, -1), false) -- ถอยหลัง
         end
     end
 end
 
--- เช็คทุก heartbeat ว่าหยุดนิ่งเกิน 30 วิไหม
-RunService.Heartbeat:Connect(function()
-    local char = player.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local vel = char.HumanoidRootPart.Velocity.Magnitude
-        if vel > 0.1 then
-            lastMoved = tick()
-        end
-        if tick() - lastMoved > 30 then
-            print("[AutoReset] หยุดนิ่งนานเกิน 30 วิ กำลังรีเซ็ตตัวละคร...")
-            resetCharacter()
-            lastMoved = tick()
-        end
+-- กระโดดทุกๆ 10 วินาที
+while true do
+    task.wait(10)
+    if lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") then
+        lp.Character.Humanoid.Jump = true
     end
-    if tick() - lastHop > hopCooldown then
-        print("[AutoHop] กำลังเปลี่ยนเซิร์ฟเวอร์...")
-        hopToLowServer()
-        lastHop = tick()
+end
+
+-- หมุนกล้องทุก 8 วิ
+task.spawn(function()
+    while true do
+        task.wait(8)
+        if workspace.CurrentCamera then
+            workspace.CurrentCamera.CFrame *= CFrame.Angles(0, math.rad(math.random(-40, 40)), 0)
+        end
     end
 end)
 
--- เริ่ม loop สุ่มเดินไปเรื่อย ๆ
-while true do
-    randomMovement()
-    wait(math.random(3, 6))
-end
+-- Hop ไปเซิร์ฟเวอร์คนน้อยทุก 2.5 ชั่วโมง
+task.spawn(function()
+    while true do
+        task.wait(9000) -- 2.5 ชั่วโมง = 9000 วินาที
+        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        for _, s in pairs(servers.data) do
+            if s.playing < s.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, lp)
+                break
+            end
+        end
+    end
+end)
