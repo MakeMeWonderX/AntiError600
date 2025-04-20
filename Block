@@ -1,139 +1,80 @@
--- ตั้งค่า Webhook URL ของคุณตรงนี้
-local webhookURL = "https://discord.com/api/webhooks/1217498669058621531/qyr6HIrmPfE1XwJB7HjF8-SdCY8fiFq6W_lqqPi8GqMDBvt9D5SK4h7rCbaIhb5RwacG"
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+local camera = game.Workspace.CurrentCamera
 
--- ฟังก์ชันส่งข้อความไปยัง Discord
-local function sendWebhookMessage(msg)
-    local HttpService = game:GetService("HttpService")
-    local data = {
-        ["content"] = msg
-    }
-    local headers = {
-        ["Content-Type"] = "application/json"
-    }
+-- ฟังก์ชั่นการเดินแบบสุ่ม
+local function randomWalk()
+    local randomPosition = Vector3.new(
+        math.random(-50, 50),
+        0,
+        math.random(-50, 50)
+    )
+    humanoid:MoveTo(randomPosition)
+end
 
-    local success, err = pcall(function()
-        HttpService:PostAsync(webhookURL, HttpService:JSONEncode(data), Enum.HttpContentType.ApplicationJson, false, headers)
-    end)
-
-    if not success then
-        warn("ไม่สามารถส่ง Webhook ได้: ", err)
+-- ฟังก์ชั่นกระโดด
+local function jump()
+    if humanoid:GetState() == Enum.HumanoidStateType.Physics then
+        humanoid:MoveTo(rootPart.Position + Vector3.new(0, 5, 0)) -- กระโดดสูง
+        humanoid.Jump = true
     end
 end
 
--- เรียกใช้เมื่อตัวจักรยานเริ่มทำงาน (แปลว่าเพิ่งรีเซิร์ฟ)
-sendWebhookMessage("🚴‍♂️ สคริปต์จักรยานเริ่มทำงานใหม่ อาจเกิดจากการ Hop Server หรือ Restart Server")
+-- ฟังก์ชั่นหมุนกล้อง
+local function rotateCamera()
+    local angle = math.random(10, 30) -- หมุนกล้องระหว่าง 10 ถึง 30 องศา
+    camera.CFrame = camera.CFrame * CFrame.Angles(0, math.rad(angle), 0)
+end
 
+-- ฟังก์ชั่นตรวจจับอุปสรรคและกระโดด
+local function jumpOverObstacle()
+    local ray = Ray.new(rootPart.Position, Vector3.new(0, -1, 0)) -- ตรวจจับอุปสรรคจากใต้เท้า
+    local hit, position = game.Workspace:FindPartOnRay(ray, character)
 
--- ✅ Server Hop ทุก 3 ชั่วโมง
-task.spawn(function()
-    local Http = game:GetService("HttpService")
-    local TPS = game:GetService("TeleportService")
-    local Players = game:GetService("Players")
-    local Api = "https://games.roblox.com/v1/games/"
-    local place = game.PlaceId
+    if hit and hit.CanCollide then
+        -- ถ้ามีการชนกับอุปสรรค ให้กระโดด
+        humanoid:MoveTo(rootPart.Position + Vector3.new(0, 5, 0)) -- กระโดด
+        humanoid.Jump = true
+    end
+end
 
-    while true do
-        task.wait(9000) -- 3 ชั่วโมง
-        local function listServers()
-            local url = Api .. place .. "/servers/Public?sortOrder=Asc&limit=10"
-            local body = Http:JSONDecode(game:HttpGet(url))
-            return body.data
-        end
-
-        local servers = listServers()
-        if #servers > 0 then
-            local chosen = servers[math.random(1, #servers)]
-            TPS:TeleportToPlaceInstance(place, chosen.id, Players.LocalPlayer)
+-- ฟังก์ชั่นเปลี่ยนเซิร์ฟเวอร์
+local function hopToLowServer()
+    local servers = game:GetService("TeleportService"):GetJoinableServers(game.PlaceId)
+    local lowServer = nil
+    for _, server in ipairs(servers) do
+        if server.PlayerCount < 10 then
+            lowServer = server
+            break
         end
     end
-end)
-
--- ✅ UI แจ้งว่าทำงาน
-task.spawn(function()
-    local StarterGui = game:GetService("StarterGui")
-    StarterGui:SetCore("SendNotification", {
-        Title = "🚴 Running Script",
-        Text = "ระบบหลบตรวจสอบทำงานแล้ว!",
-        Duration = 10
-    })
-end)
-
--- ✅ หมุนกล้อง + เลี้ยวสลับทุก 8 วิ
-task.spawn(function()
-    local cam = workspace.CurrentCamera
-    while true do
-        task.wait(8)
-        -- หมุนกล้องสุ่มแบบแรงขึ้น
-        local yaw = math.rad(math.random(-90, 90)) -- หันแรงขึ้น 2 เท่า
-        local pitch = math.rad(math.random(-15, 15)) -- เพิ่มก้ม/เงยเล็กน้อย
-        cam.CFrame = cam.CFrame * CFrame.Angles(pitch, yaw, 0)
-
-        -- เลี้ยวซ้าย-ขวาสลับสุ่ม (จำลองพฤติกรรมผู้เล่น)
-        local bike
-        for _, model in pairs(workspace:GetChildren()) do
-            if model:IsA("Model") and model:FindFirstChildWhichIsA("VehicleSeat") then
-                bike = model
-                break
-            end
-        end
-        if bike then
-            local seat = bike:FindFirstChildWhichIsA("VehicleSeat")
-            if seat then
-                seat.Steer = math.random(0, 1) == 0 and -1 or 1
-                wait(1)
-                seat.Steer = 0
-            end
-        end
+    if lowServer then
+        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, lowServer.Id, player)
     end
-end)
+end
 
--- ✅ ยกล้อ + ดริฟต์ + หมุนพวงมาลัยทุก 20 วิ
-task.spawn(function()
-    local function getBike()
-        for _, model in pairs(workspace:GetChildren()) do
-            if model:IsA("Model") and model:FindFirstChildWhichIsA("VehicleSeat") then
-                return model
-            end
-        end
-        return nil
+-- ระบบการเดินสุ่ม, กระโดด, หมุนกล้อง, และกระโดดข้ามอุปสรรค
+while true do
+    wait(3) -- ทุก 3 วินาที
+    randomWalk() -- เดินสุ่ม
+
+    -- ตรวจจับและกระโดดข้ามอุปสรรค
+    jumpOverObstacle()
+
+    -- ทุก 10 วินาทีให้กระโดด
+    if math.random() < 0.1 then
+        jump()
     end
 
-    while true do
-        local bike = getBike()
-        if bike and bike.PrimaryPart then
-            -- ยกล้อ
-            bike:SetPrimaryPartCFrame(bike.PrimaryPart.CFrame * CFrame.Angles(math.rad(-25), 0, 0))
-
-            -- ดริฟต์
-            local drift = Instance.new("BodyAngularVelocity")
-            drift.AngularVelocity = Vector3.new(0, 5, 0)
-            drift.MaxTorque = Vector3.new(0, 100000, 0)
-            drift.P = 1250
-            drift.Parent = bike.PrimaryPart
-            game:GetService("Debris"):AddItem(drift, 1.5)
-
-            -- พวงมาลัยหมุน
-            local seat = bike:FindFirstChildWhichIsA("VehicleSeat")
-            if seat then
-                seat.Steer = -1
-                wait(0.5)
-                seat.Steer = 1
-                wait(0.5)
-                seat.Steer = 0
-            end
-
-            -- กดหมัด (ใช้คีย์ 1) **เฉพาะตอนที่จักรยานจอด**
-            if seat.Throttle == 0 then  -- ตรวจสอบว่าจักรยานหยุดหรือไม่
-                game:GetService("VirtualInputManager"):InputBegin(Enum.UserInputType.Keyboard, Enum.KeyCode.One)
-                game:GetService("VirtualInputManager"):InputEnd(Enum.UserInputType.Keyboard, Enum.KeyCode.One)
-            end
-
-            -- เพิ่มการเร่งความเร็วแบบหลอกๆ
-            local throttle = seat.Throttle
-            seat.Throttle = 0.6 -- เร่งเต็มที่
-            wait(2)
-            seat.Throttle = throttle -- คืนค่าความเร็วกลับไป
-        end
-        wait(20) -- ยกล้อทุก 20 วิ
+    -- ทุก 8 วินาทีหมุนกล้อง
+    if tick() % 8 < 1 then
+        rotateCamera()
     end
-end)
+
+    -- ทุก 2.5 ชั่วโมงให้ลองเปลี่ยนเซิร์ฟเวอร์ไปที่เซิร์ฟเวอร์ที่มีผู้เล่นน้อย
+    if tick() % (2.5 * 60 * 60) < 1 then
+        hopToLowServer()
+    end
+end
