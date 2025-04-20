@@ -1,54 +1,83 @@
+-- 🚲 สคริปต์จักรยานอัตโนมัติ: ยกล้อ, ดริฟต์, หมุนกล้อง, และลอยข้ามสิ่งกีดขวาง
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local HRP = Character:WaitForChild("HumanoidRootPart")
 
-local lastWheelie = 0
-local lastDrift = 0
-local wheelieInterval = 20
-local driftInterval = 12
-local floatHeight = 3
+-- ตั้งค่าเวลาและพารามิเตอร์
+local wheelieInterval = 20          -- ยกล้อทุกกี่วินาที
+local driftInterval   = 12          -- ดริฟต์ทุกกี่วินาที
+local cameraRotateInterval = 8      -- หมุนกล้องทุกกี่วินาที
+local floatCheckInterval   = 0.1    -- ตรวจสิ่งกีดขวางทุกกี่วินาที
+local floatVelocityY       = 60     -- ความเร็วแกน Y เมื่อลอยขึ้น
 
--- Function to float bike over obstacles
-local function floatOverObstacles()
-	local ray = Ray.new(HumanoidRootPart.Position, Vector3.new(0, -5, 0))
-	local part, position = workspace:FindPartOnRay(ray, Character)
-	if part and (HumanoidRootPart.Position - position).Magnitude < 2 then
-		HumanoidRootPart.Velocity = Vector3.new(0, 50, 0)
-	end
-end
+-- ตัวแปรจับเวลา
+local lastWheelie       = 0
+local lastDrift         = 0
+local lastCameraRotate  = 0
 
--- Simulate Wheelie
+-- ฟังก์ชันยกล้อ (Wheelie)
 local function doWheelie()
-	local now = tick()
-	if now - lastWheelie >= wheelieInterval then
-		lastWheelie = now
-		HumanoidRootPart.Velocity = HumanoidRootPart.CFrame.LookVector * 40 + Vector3.new(0, 20, 0)
-	end
+    local now = tick()
+    if now - lastWheelie >= wheelieInterval then
+        -- สร้างแรงยกล้อพร้อมความเร็วตามทิศทาง
+        HRP.Velocity = HRP.CFrame.LookVector * 40 + Vector3.new(0, 20, 0)
+        lastWheelie = now
+    end
 end
 
--- Simulate Drift
+-- ฟังก์ชันดริฟต์ (Drift)
 local function doDrift()
-	local now = tick()
-	if now - lastDrift >= driftInterval then
-		lastDrift = now
-		HumanoidRootPart.Velocity = HumanoidRootPart.CFrame.RightVector * 40
-	end
+    local now = tick()
+    if now - lastDrift >= driftInterval then
+        HRP.Velocity = HRP.CFrame.RightVector * 40
+        lastDrift = now
+    end
 end
 
--- Rotate Camera Periodically
-task.spawn(function()
-	while true do
-		wait(8)
-		local cam = workspace.CurrentCamera
-		cam.CFrame = cam.CFrame * CFrame.Angles(0, math.rad(math.random(-60, 60)), 0)
-	end
+-- ฟังก์ชันหมุนกล้องเพื่อหลอกตา
+local function rotateCamera()
+    local now = tick()
+    if now - lastCameraRotate >= cameraRotateInterval then
+        local cam = workspace.CurrentCamera
+        TweenService:Create(cam, TweenInfo.new(0.5), {
+            CFrame = cam.CFrame * CFrame.Angles(0, math.rad(math.random(-60, 60)), 0)
+        }):Play()
+        lastCameraRotate = now
+    end
+end
+
+-- ฟังก์ชันลอยข้ามสิ่งกีดขวาง
+local function floatOverObstacle()
+    local origin = HRP.Position
+    local direction = HRP.CFrame.LookVector * 5
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local result = workspace:Raycast(origin, direction, params)
+    if result and result.Instance and result.Instance.CanCollide then
+        -- ยิงแรงในแกน Y เพื่อให้ลอยขึ้น
+        HRP.Velocity = Vector3.new(HRP.Velocity.X, floatVelocityY, HRP.Velocity.Z)
+    end
+end
+
+-- เชื่อมต่อกับ RenderStepped สำหรับ wheelie, drift, rotate
+RunService.RenderStepped:Connect(function()
+    doWheelie()
+    doDrift()
+    rotateCamera()
 end)
 
--- Periodic Actions
-RunService.RenderStepped:Connect(function()
-	floatOverObstacles()
-	doWheelie()
-	doDrift()
+-- Loop แยกสำหรับ float over obstacle
+task.spawn(function()
+    while true do
+        task.wait(floatCheckInterval)
+        floatOverObstacle()
+    end
 end)
+
+print("✅ Bike auto script loaded: wheelie, drift, camera rotate, float over obstacles")
