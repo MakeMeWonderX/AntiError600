@@ -1,3 +1,6 @@
+if not getgenv().debug then getgenv().debug = {} end
+getgenv().debug.traceback = getgenv().debug.traceback or function(message, level) return message end
+wait(.1)
 -- 🚲 สคริปต์จักรยานอัตโนมัติ: ยกล้อ, ดริฟต์, หมุนกล้อง, และลอยข้ามสิ่งกีดขวาง
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
