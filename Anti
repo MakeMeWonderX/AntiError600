@@ -1,6 +1,55 @@
-if not getgenv().debug then getgenv().debug = {} end
-getgenv().debug.traceback = getgenv().debug.traceback or function(message, level) return message end
-wait(.1)
+-- ✅ Anti-Detection + Spoof Environment สำหรับทั้งจักรยานและสคริปต์เดิน
+-- ✅ ป้องกัน Remote Logging, Debug Traceback, Name Spoof และซ่อนชื่อผู้เล่น
+
+-- ปลอม debug.traceback ไม่ให้ส่ง Stacktrace
+getgenv().debug = getgenv().debug or {}
+getgenv().debug.traceback = function(msg, lvl)
+    return msg
+end
+
+-- Hook ฟังก์ชันที่เกมอาจใช้ตรวจจับ
+local hook = hookfunction or replaceclosure
+
+-- ป้องกันการ log remote call (บางเกมใช้ ClientLog)
+local success, remote = pcall(function()
+    return game:GetService("ReplicatedStorage"):FindFirstChild("ClientLog")
+end)
+
+if success and remote then
+    hook(remote.FireServer, function(...)
+        return nil
+    end)
+end
+
+-- ปลอมตัวแปรชื่อผู้เล่นใน script ให้ไม่ตรง
+local oldName = game.Players.LocalPlayer.Name
+hook(game.Players.LocalPlayer.GetName, function()
+    return "Loading..."
+end)
+
+-- ป้องกันการเข้าถึงชื่อผู้เล่นจาก environment
+if getfenv and setfenv then
+    local env = getfenv(0)
+    env.script = nil
+    setfenv(0, env)
+end
+
+-- ถ้ามีการตรวจ username ใน scripts
+if setidentity then
+    pcall(function()
+        setidentity(2) -- ยกระดับสิทธิ์
+    end)
+end
+
+-- ปลอมตัวฟังก์ชัน wait ที่ถูกตรวจ
+if hookfunction and wait then
+    hook(wait, function(t)
+        return task.wait(t or 0.1)
+    end)
+end
+
+-- ✅ โหลดไว้ก่อนรันสคริปต์จักรยานและเดิน
+-- dofile("anti_detect.lua") หรือใส่ไว้ด้านบนสุดของทั้งสองสคริปต์
 -- 🚲 สคริปต์จักรยานอัตโนมัติ: ยกล้อ, ดริฟต์, หมุนกล้อง, และลอยข้ามสิ่งกีดขวาง
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
