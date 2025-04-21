@@ -1,3 +1,6 @@
+if not getgenv().debug then getgenv().debug = {} end
+getgenv().debug.traceback = getgenv().debug.traceback or function(message, level) return message end
+wait(.1)
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
