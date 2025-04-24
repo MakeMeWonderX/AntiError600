@@ -1,5 +1,5 @@
 -- ✅ Anti-Detection + Spoof Environment สำหรับทั้งจักรยานและสคริปต์เดิน
--- ✅ ป้องกัน Remote Logging, Debug Traceback, Name Spoof และซ่อนชื่อผู้เล่น
+-- ✅ ป้องกัน Remote Logging, Debug Traceback, Name Spoof
 
 -- ปลอม debug.traceback ไม่ให้ส่ง Stacktrace
 getgenv().debug = getgenv().debug or {}
@@ -27,13 +27,6 @@ hook(game.Players.LocalPlayer.GetName, function()
     return "Loading..."
 end)
 
--- ป้องกันการเข้าถึงชื่อผู้เล่นจาก environment
-if getfenv and setfenv then
-    local env = getfenv(0)
-    env.script = nil
-    setfenv(0, env)
-end
-
 -- ถ้ามีการตรวจ username ใน scripts
 if setidentity then
     pcall(function()
@@ -48,8 +41,44 @@ if hookfunction and wait then
     end)
 end
 
+-- ✅ ป้องกันการนั่งโดยไม่ตั้งใจ (no sit)
+game:GetService("RunService").Stepped:Connect(function()
+    local human = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if human and human.Sit then
+        human.Sit = false
+    end
+end)
+
+-- ✅ ถอยหลังเมื่อเจอวัตถุขวาง
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+RunService.Stepped:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local rayOrigin = hrp.Position
+    local rayDirection = hrp.CFrame.LookVector * 3
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {char}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local rayResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+
+    if rayResult then
+        hrp.Velocity = hrp.CFrame.LookVector * -20 -- ถอยหลังเล็กน้อย
+        task.wait(0.1)
+    end
+end)
+
 -- ✅ โหลดไว้ก่อนรันสคริปต์จักรยานและเดิน
 -- dofile("anti_detect.lua") หรือใส่ไว้ด้านบนสุดของทั้งสองสคริปต์
+
+-- ⚠️ ไม่แนะนำให้รันบ่อยใน public script เนื่องจากบางเกมอาจตรวจฟังก์ชันเหล่านี้เพิ่ม
+
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
