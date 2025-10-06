@@ -1,0 +1,424 @@
+-- ==============================================================================
+-- 1. RESERVED SERVER CODE GENERATION LOGIC (MD5, HMAC, BASE64)
+-- ==============================================================================
+local md5 = {}
+local hmac = {}
+local base64 = {}
+local bit32 = bit32 
+
+do
+	do
+		local T = {
+			0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8, 0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a, 0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70, 0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665, 0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1, 0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
+		}
+
+		local function add(a, b)
+			local lsw = bit32.band(a, 0xFFFF) + bit32.band(b, 0xFFFF)
+			local msw = bit32.rshift(a, 16) + bit32.rshift(b, 16) + bit32.rshift(lsw, 16)
+			return bit32.bor(bit32.lshift(msw, 16), bit32.band(lsw, 0xFFFF))
+		end
+
+		local function rol(x, n)
+			return bit32.bor(bit32.lshift(x, n), bit32.rshift(x, 32 - n))
+		end
+
+		local function F(x, y, z) return bit32.bor(bit32.band(x, y), bit32.band(bit32.bnot(x), z)) end
+		local function G(x, y, z) return bit32.bor(bit32.band(x, z), bit32.band(y, bit32.bnot(z))) end
+		local function H(x, y, z) return bit32.bxor(x, bit32.bxor(y, z)) end
+		local function I(x, y, z) return bit32.bxor(y, bit32.bor(x, bit32.bnot(z))) end
+
+		function md5.sum(message)
+			local a, b, c, d = 0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476
+
+			local message_len = #message
+			local padded_message = message .. "\128"
+			while #padded_message % 64 ~= 56 do
+				padded_message = padded_message .. "\0"
+			end
+
+			local len_bytes = ""
+			local len_bits = message_len * 8
+			for i = 0, 7 do
+				len_bytes = len_bytes .. string.char(bit32.band(bit32.rshift(len_bits, i * 8), 0xFF))
+			end
+			padded_message = padded_message .. len_bytes
+
+			for i = 1, #padded_message, 64 do
+				local chunk = padded_message:sub(i, i + 63)
+				local X = {}
+				for j = 0, 15 do
+					local b1, b2, b3, b4 = chunk:byte(j * 4 + 1, j * 4 + 4)
+					X[j] = bit32.bor(b1, bit32.lshift(b2, 8), bit32.lshift(b3, 16), bit32.lshift(b4, 24))
+				end
+
+				local aa, bb, cc, dd = a, b, c, d
+
+				local s = { 7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21 }
+
+				for j = 0, 63 do
+					local f, k, shift_index
+					if j < 16 then
+						f = F(b, c, d)
+						k = j
+						shift_index = j % 4
+					elseif j < 32 then
+						f = G(b, c, d)
+						k = (1 + 5 * j) % 16
+						shift_index = 4 + (j % 4)
+					elseif j < 48 then
+						f = H(b, c, d)
+						k = (5 + 3 * j) % 16
+						shift_index = 8 + (j % 4)
+					else
+						f = I(b, c, d)
+						k = (7 * j) % 16
+						shift_index = 12 + (j % 4)
+					end
+
+					local temp = add(a, f)
+					temp = add(temp, X[k])
+					temp = add(temp, T[j + 1])
+					temp = rol(temp, s[shift_index + 1])
+
+					local new_b = add(b, temp)
+					a, b, c, d = d, new_b, b, c
+				end
+
+				a = add(a, aa)
+				b = add(b, bb)
+				c = add(c, cc)
+				d = add(d, dd)
+			end
+
+			local function to_le_hex(n)
+				local s = ""
+				for i = 0, 3 do
+					s = s .. string.char(bit32.band(bit32.rshift(n, i * 8), 0xFF))
+				end
+				return s
+			end
+
+			return to_le_hex(a) .. to_le_hex(b) .. to_le_hex(c) .. to_le_hex(d)
+		end
+	end
+
+	do
+		function hmac.new(key, msg, hash_func)
+			if #key > 64 then
+				key = hash_func(key)
+			end
+
+			local o_key_pad = ""
+			local i_key_pad = ""
+			for i = 1, 64 do
+				local byte = (i <= #key and string.byte(key, i)) or 0
+				o_key_pad = o_key_pad .. string.char(bit32.bxor(byte, 0x5C))
+				i_key_pad = i_key_pad .. string.char(bit32.bxor(byte, 0x36))
+			end
+
+			return hash_func(o_key_pad .. hash_func(i_key_pad .. msg))
+		end
+	end
+
+	do
+		local b = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+		function base64.encode(data)
+			return (
+				(data:gsub(".", function(x)
+					local r, b_val = "", x:byte()
+					for i = 8, 1, -1 do
+						r = r .. (b_val % 2 ^ i - b_val % 2 ^ (i - 1) > 0 and "1" or "0")
+					end
+					return r
+				end) .. "0000"):gsub("%d%d%d?%d?%d?%d?", function(x)
+					if #x < 6 then
+						return ""
+					end
+					local c = 0
+					for i = 1, 6 do
+						c = c + (x:sub(i, i) == "1" and 2 ^ (6 - i) or 0)
+					end
+					return b:sub(c + 1, c + 1)
+				end) .. ({ "", "==", "=" })[#data % 3 + 1]
+			)
+		end
+	end
+end
+
+local function GenerateReservedServerCode(placeId)
+	local uuid = {}
+	for i = 1, 16 do
+		uuid[i] = math.random(0, 255)
+	end
+
+	uuid[7] = bit32.bor(bit32.band(uuid[7], 0x0F), 0x40) -- v4
+	uuid[9] = bit32.bor(bit32.band(uuid[9], 0x3F), 0x80) -- RFC 4122
+
+	local firstBytes = ""
+	for i = 1, 16 do
+		firstBytes = firstBytes .. string.char(uuid[i])
+	end
+
+	local gameCode =
+		string.format("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", table.unpack(uuid))
+
+	local placeIdBytes = ""
+	local pIdRec = placeId
+	for _ = 1, 8 do
+		placeIdBytes = placeIdBytes .. string.char(pIdRec % 256)
+		pIdRec = math.floor(pIdRec / 256)
+	end
+
+	local content = firstBytes .. placeIdBytes
+
+	local SUPERDUPERSECRETROBLOXKEYTHATTHEYDIDNTCHANGEEVERSINCEFOREVER = "e4Yn8ckbCJtw2sv7qmbg" 
+	local signature = hmac.new(SUPERDUPERSECRETROBLOXKEYTHATTHEYDIDNTCHANGEEVERSINCEFOREVER, content, md5.sum)
+
+	local accessCodeBytes = signature .. content
+
+	local accessCode = base64.encode(accessCodeBytes)
+	accessCode = accessCode:gsub("+", "-"):gsub("/", "_")
+
+	local pdding = 0
+	accessCode, _ = accessCode:gsub("=", function()
+		pdding = pdding + 1
+		return ""
+	end)
+
+	accessCode = accessCode .. tostring(pdding)
+
+	return accessCode, gameCode
+end
+
+-- ==============================================================================
+-- 2. UI CREATION (พร้อม Status Indicator)
+-- ==============================================================================
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local PlaceId = game.PlaceId
+local currentAccessCode = "Not Generated"
+
+-- Reference the working Remote Event
+local RemoteTeleport = game.RobloxReplicatedStorage.ContactListIrisInviteTeleport
+
+-- Function to create UI elements
+local function make(class, parent)
+    local obj = Instance.new(class)
+    obj.Parent = parent
+    return obj
+end
+
+-- ScreenGui Setup
+local ScreenGui = make("ScreenGui", LocalPlayer.PlayerGui)
+ScreenGui.Name = "ReservedServerUI"
+
+-- Main Frame (Center of screen)
+local MainFrame = make("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 300, 0, 350)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -175)
+MainFrame.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+
+-- Title
+local Title = make("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "Free Private Server"
+Title.Font = Enum.Font.SourceSansBold
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 20
+Title.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+-- **สำคัญ: Title ใช้สำหรับลาก UI**
+
+-- Server Id Display & Copy Button
+local ServerIdLabel = make("TextLabel", MainFrame)
+ServerIdLabel.Size = UDim2.new(0.9, 0, 0, 20)
+ServerIdLabel.Position = UDim2.new(0.05, 0, 0, 50)
+ServerIdLabel.Text = "Server Id:"
+ServerIdLabel.Font = Enum.Font.SourceSans
+ServerIdLabel.TextColor3 = Color3.new(1, 1, 1)
+ServerIdLabel.TextSize = 14
+ServerIdLabel.TextXAlignment = Enum.TextXAlignment.Left
+ServerIdLabel.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+
+local ServerIdDisplay = make("TextLabel", MainFrame)
+ServerIdDisplay.Size = UDim2.new(0.7, 0, 0, 30)
+ServerIdDisplay.Position = UDim2.new(0.05, 0, 0, 75)
+ServerIdDisplay.Text = currentAccessCode
+ServerIdDisplay.Font = Enum.Font.SourceSans
+ServerIdDisplay.TextColor3 = Color3.new(1, 1, 1)
+ServerIdDisplay.TextSize = 14
+ServerIdDisplay.TextXAlignment = Enum.TextXAlignment.Left
+ServerIdDisplay.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+ServerIdDisplay.ClipsDescendants = true
+
+local CopyButton = make("TextButton", MainFrame)
+CopyButton.Size = UDim2.new(0.2, 0, 0, 30)
+CopyButton.Position = UDim2.new(0.75, 0, 0, 75)
+CopyButton.Text = "Copy"
+CopyButton.Font = Enum.Font.SourceSansBold
+CopyButton.TextColor3 = Color3.new(1, 1, 1)
+CopyButton.TextSize = 16
+CopyButton.BackgroundColor3 = Color3.new(0.3, 0.4, 0.9) -- Blue
+
+-- Generate Button
+local GenerateButton = make("TextButton", MainFrame)
+GenerateButton.Size = UDim2.new(0.9, 0, 0, 40)
+GenerateButton.Position = UDim2.new(0.05, 0, 0, 115)
+GenerateButton.Text = "Generate Server Id"
+GenerateButton.Font = Enum.Font.SourceSansBold
+GenerateButton.TextColor3 = Color3.new(1, 1, 1)
+GenerateButton.TextSize = 18
+GenerateButton.BackgroundColor3 = Color3.new(0.25, 0.5, 0.9) -- Lighter Blue
+
+-- Join Own Server Button
+local JoinOwnButton = make("TextButton", MainFrame)
+JoinOwnButton.Size = UDim2.new(0.9, 0, 0, 40)
+JoinOwnButton.Position = UDim2.new(0.05, 0, 0, 165)
+JoinOwnButton.Text = "Join Private Server"
+JoinOwnButton.Font = Enum.Font.SourceSansBold
+JoinOwnButton.TextColor3 = Color3.new(1, 1, 1)
+JoinOwnButton.TextSize = 18
+JoinOwnButton.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2) -- Green
+
+-- Friends Join Method Section
+local FriendsLabel = make("TextLabel", MainFrame)
+FriendsLabel.Size = UDim2.new(0.9, 0, 0, 20)
+FriendsLabel.Position = UDim2.new(0.05, 0, 0, 220)
+FriendsLabel.Text = "Friends Join Method"
+FriendsLabel.Font = Enum.Font.SourceSansBold
+FriendsLabel.TextColor3 = Color3.new(1, 1, 1)
+FriendsLabel.TextSize = 14
+FriendsLabel.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+
+local FriendIdTextBox = make("TextBox", MainFrame)
+FriendIdTextBox.Size = UDim2.new(0.9, 0, 0, 30)
+FriendIdTextBox.Position = UDim2.new(0.05, 0, 0, 245)
+FriendIdTextBox.PlaceholderText = "Place your friends server id here..."
+FriendIdTextBox.Font = Enum.Font.SourceSans
+FriendIdTextBox.TextColor3 = Color3.new(1, 1, 1)
+FriendIdTextBox.TextSize = 14
+FriendIdTextBox.TextXAlignment = Enum.TextXAlignment.Left
+FriendIdTextBox.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+
+local JoinFriendButton = make("TextButton", MainFrame)
+JoinFriendButton.Size = UDim2.new(0.9, 0, 0, 40)
+JoinFriendButton.Position = UDim2.new(0.05, 0, 0, 280)
+JoinFriendButton.Text = "Join Friend"
+JoinFriendButton.Font = Enum.Font.SourceSansBold
+JoinFriendButton.TextColor3 = Color3.new(1, 1, 1)
+JoinFriendButton.TextSize = 18
+JoinFriendButton.BackgroundColor3 = Color3.new(0.4, 0.4, 0.9) -- Purple/Darker Blue
+
+-- **Status Indicator**
+local StatusLabel = make("TextLabel", MainFrame)
+StatusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+StatusLabel.Position = UDim2.new(0.05, 0, 0, 315) 
+StatusLabel.Text = "Status: Ready"
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextColor3 = Color3.new(0, 0.8, 0.8) -- Cyan for Ready
+StatusLabel.TextSize = 14
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+
+
+-- Footer/Credit
+local Credit = make("TextLabel", MainFrame)
+Credit.Size = UDim2.new(1, 0, 0, 20)
+Credit.Position = UDim2.new(0, 0, 1, -20)
+Credit.Text = "Made By - Joshzz | Universal Works All Games"
+Credit.Font = Enum.Font.SourceSans
+Credit.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+Credit.TextSize = 12
+Credit.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+
+-- ==============================================================================
+-- 3. BUTTON CONNECTIONS (พร้อม Drag และ Status Update)
+-- ==============================================================================
+
+-- **A. Dragging Logic**
+local dragging = false
+local dragStartPos = nil
+
+Title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        -- Calculate the offset from the frame's corner to the mouse/touch point
+        dragStartPos = UserInputService:GetMouseLocation() - Vector2.new(MainFrame.AbsolutePosition.X, MainFrame.AbsolutePosition.Y)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local currentMousePos = UserInputService:GetMouseLocation()
+        local newPos = currentMousePos - dragStartPos
+        -- Update the frame's position based on the center point (Scale=0)
+        MainFrame.Position = UDim2.new(0, newPos.X, 0, newPos.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        dragging = false
+    end
+end)
+
+
+-- **B. Generate Button Click**
+GenerateButton.MouseButton1Click:Connect(function()
+    StatusLabel.Text = "Status: Generating Access Code..."
+    StatusLabel.TextColor3 = Color3.new(1, 1, 0) -- Yellow
+    
+    local accessCode, _ = GenerateReservedServerCode(PlaceId)
+    
+    currentAccessCode = accessCode
+    ServerIdDisplay.Text = currentAccessCode
+    
+    StatusLabel.Text = "Status: Generation Successful. Ready to Join/Copy."
+    StatusLabel.TextColor3 = Color3.new(0, 1, 0) -- Green
+end)
+
+-- **C. Copy Button Click**
+CopyButton.MouseButton1Click:Connect(function()
+    if currentAccessCode ~= "Not Generated" and setclipboard then
+        setclipboard(currentAccessCode)
+        CopyButton.Text = "Copied!"
+        StatusLabel.Text = "Status: Access Code Copied to Clipboard!"
+        StatusLabel.TextColor3 = Color3.new(0, 1, 0) -- Green
+        wait(1)
+        CopyButton.Text = "Copy"
+    else
+        CopyButton.Text = "Failed"
+        StatusLabel.Text = "Status: ERROR - Failed to Copy!"
+        StatusLabel.TextColor3 = Color3.new(1, 0, 0) -- Red
+        wait(1)
+        CopyButton.Text = "Copy"
+    end
+end)
+
+-- **D. Join Own Server Button Click**
+JoinOwnButton.MouseButton1Click:Connect(function()
+    if currentAccessCode ~= "Not Generated" then
+        StatusLabel.Text = "Status: Joining Server..."
+        StatusLabel.TextColor3 = Color3.new(0.3, 0.5, 1) -- Blue
+        RemoteTeleport:FireServer(PlaceId, "", currentAccessCode)
+    else
+        StatusLabel.Text = "Status: ERROR - Please Generate Code First!"
+        StatusLabel.TextColor3 = Color3.new(1, 0, 0) -- Red
+    end
+end)
+
+-- **E. Join Friend Button Click**
+JoinFriendButton.MouseButton1Click:Connect(function()
+    local accessCode = FriendIdTextBox.Text
+    if #accessCode > 10 then 
+        StatusLabel.Text = "Status: Joining Friend Server..."
+        StatusLabel.TextColor3 = Color3.new(0.3, 0.5, 1) -- Blue
+        RemoteTeleport:FireServer(PlaceId, "", accessCode)
+    else
+        StatusLabel.Text = "Status: ERROR - Invalid Access Code!"
+        StatusLabel.TextColor3 = Color3.new(1, 0, 0) -- Red
+    end
+end)
